@@ -2,6 +2,7 @@ package main
 
 import (
 	"math/rand"
+	"sort"
 	"strings"
 )
 
@@ -14,7 +15,7 @@ type CharLine struct {
 
 // GenRandomChar returns a string randomly, with length 1 as a single character, in ascii [33, 127)
 func GenRandomChar() (char string) {
-	return string(33 + rand.Intn(127-33))
+	return string(rune(33 + rand.Intn(127-33)))
 }
 
 // GenCharLine returns an instance of CharLine
@@ -33,13 +34,15 @@ func GenCharLine(len int) (lin CharLine) {
 	return *cl
 }
 
-// GenRandCharLine returns a random instance, with occupation rate as (1 / er)
-func GenRandCharLine(len, er int) (lin CharLine) {
+// GenRandCharLine returns a random instance, with occupation rate as (1 / er), use fac to specify the sub row width
+func GenRandCharLine(len, er int, fac int) (lin CharLine) {
 	lin = GenCharLine(len)
-	for i := 0; i < lin.len; i++ {
+	for i := 0; i < lin.len-fac+1; i += fac {
 		if rand.Intn(er) == 0 {
-			lin.ept[i] = false
-			lin.eptn--
+			for j := 0; j < fac; j++ {
+				lin.ept[i+j] = false
+				lin.eptn--
+			}
 		}
 	}
 	lin.ResetChars()
@@ -88,6 +91,8 @@ func (cl CharLine) slotInfo() (occup, empty []int) {
 			indOccup += 1
 		}
 	}
+	sort.Ints(occup)
+	sort.Ints(empty)
 	return occup, empty
 }
 
@@ -111,6 +116,41 @@ func (cl *CharLine) Transi(addn int) {
 	cl.ResetSlot(occup, empty)
 }
 
+func (cl *CharLine) NewTransi(addn int) {
+	occup, empty := cl.slotInfo()
+	swplen := min3(len(occup), len(empty), intabs(addn))
+	if addn == 0 {
+		return
+	}
+	// if addn < 0 {
+	// 	sender, reciever := occup, empty
+	// 	indl, indr := GetRandomContinuousSubList(sender, swplen)
+	// 	occup, empty = SwapSubList(sender, reciever, indl, indr)
+	// } else {
+	// 	sender, reciever := empty, occup
+	// 	indl, indr := GetRandomContinuousSubList(sender, swplen)
+	// 	empty, occup = SwapSubList(sender, reciever, indl, indr)
+	// }
+	if addn < 0 {
+		occup, empty = integratedTransi(occup, empty, swplen)
+	} else {
+		empty, occup = integratedTransi(empty, occup, swplen)
+	}
+	cl.ResetSlot(occup, empty)
+}
+
+func integratedTransi(sender, reciever []int, n int) (ns, nr []int) {
+	indl, indr, ok := GetRandomContinuousSubList(sender, n)
+	if !ok {
+		for i := 0; i < n; i++ {
+			sender, reciever = integratedTransi(sender, reciever, 1)
+		}
+		return sender, reciever
+	}
+	sender, reciever = SwapSubList(sender, reciever, indl, indr)
+	return sender, reciever
+}
+
 // ResetSlot reset the empty infomation by occupation/empty index lists
 func (cl *CharLine) ResetSlot(occup, empty []int) {
 	for i := range occup {
@@ -120,6 +160,41 @@ func (cl *CharLine) ResetSlot(occup, empty []int) {
 		cl.ept[empty[i]] = true
 	}
 	cl.eptn = len(empty)
+}
+
+func IsContinue(arr []int) bool {
+	res := true
+	for i := range arr {
+		res = res && ((arr[i] - arr[0]) == i)
+	}
+	return res
+}
+
+func GetAllContinuousSubList(arr []int, n int) (nlis []int) {
+	nlis = make([]int, 0)
+	for i := 0; i < len(arr)-n+1; i++ {
+		if IsContinue(arr[i : i+n]) {
+			nlis = append(nlis, i)
+		}
+	}
+	return nlis
+}
+
+func GetRandomContinuousSubList(arr []int, n int) (indl, indr int, ok bool) {
+	allind := GetAllContinuousSubList(arr, n)
+	if len(allind) == 0 {
+		return 0, 0, false
+	}
+	res := rand.Intn(len(allind))
+	return allind[res], allind[res] + n - 1, true
+}
+
+func SwapSubList(sender, reciever []int, indl, indr int) (nsen, nrec []int) {
+	nrec = append(reciever, sender[indl:indr+1]...)
+	nsen = append(sender[:indl], sender[indr+1:]...)
+	sort.Ints(nsen)
+	sort.Ints(nrec)
+	return nsen, nrec
 }
 
 // min3 returns the minimul integer value of given three parameters

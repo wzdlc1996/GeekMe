@@ -12,6 +12,7 @@ import (
 const UpdateEveryLineOverHeight float32 = 0.5
 const UpdateTimeInMillisecond int = 20
 const emptyRate int = 10
+const rowWid int = 2
 
 func main() {
 
@@ -19,7 +20,7 @@ func main() {
 	defer color.Unset() // Use it in your function
 
 	ind := 0
-	rel := []int{1, -1, 1, 1, -1, -1, 1, 1, 1, -1, -1, -1}
+	rel := []int{1, 3, 2, -2, -3, -1, 3, 4, -4, -2, -1}
 	relind := 0
 
 	cl, linupd := StateInit()
@@ -27,7 +28,7 @@ func main() {
 	for {
 		ind++
 		if ind%linupd == 0 {
-			cl.Transi(rel[relind])
+			cl.NewTransi(rel[relind])
 			relind = (relind + 1) % len(rel)
 		}
 		cl.ResetChars()
@@ -40,6 +41,6 @@ func main() {
 func StateInit() (cl CharLine, linupd int) {
 	wid, hei, _ := term.GetSize(0)
 	linupd = int(float32(hei) * UpdateEveryLineOverHeight)
-	cl = GenRandCharLine(wid, emptyRate)
+	cl = GenRandCharLine(wid, emptyRate, rowWid)
 	return cl, linupd
 }
