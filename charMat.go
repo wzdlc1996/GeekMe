@@ -1,25 +1,21 @@
 package main
 
 import (
+	"fmt"
 	"math/rand"
 	"sort"
 	"strings"
 )
 
 type CharLine struct {
-	len  int
-	arr  []string
-	ept  map[int]bool
-	eptn int
+	len int          // len is the length of one CharLine, should be the same as the window width
+	arr []string     // arr is the body of CharLine, stores all available characters
+	ept map[int]bool // ept is the state of CharLine, denotes whether a slot is empty
+	dur []int        // dur is the time of rows of CharLine, if it gets to zero one row ends
+	mid int
 }
 
-// GenRandomChar returns a string randomly, with length 1 as a single character, in ascii [33, 127)
-func GenRandomChar() (char string) {
-	return string(rune(33 + rand.Intn(127-33)))
-}
-
-// GenCharLine returns an instance of CharLine
-func GenCharLine(len int) (lin CharLine) {
+func NewCharLine(len, mid int) CharLine {
 	cl := new(CharLine)
 	cl.len = len
 	cl.ept = make(map[int]bool)
@@ -30,23 +26,18 @@ func GenCharLine(len int) (lin CharLine) {
 	for i := range cl.arr {
 		cl.arr[i] = GenRandomChar()
 	}
-	cl.eptn = len
+	cl.dur = make([]int, cl.len)
+	cl.mid = mid
 	return *cl
 }
 
-// GenRandCharLine returns a random instance, with occupation rate as (1 / er), use fac to specify the sub row width
-func GenRandCharLine(len, er int, fac int) (lin CharLine) {
-	lin = GenCharLine(len)
-	for i := 0; i < lin.len-fac+1; i += fac {
-		if rand.Intn(er) == 0 {
-			for j := 0; j < fac; j++ {
-				lin.ept[i+j] = false
-				lin.eptn--
-			}
-		}
+func (ch *CharLine) Update(addn int, dur []int) {
+	emptySlot, eptn := ch.genEmptySlot()
+	samp := RandSample(emptySlot, intmin(eptn, addn))
+	ch.addAt(samp, dur)
+	for i := 0; i < ch.len; i++ {
+		ch.updateAt(i)
 	}
-	lin.ResetChars()
-	return lin
 }
 
 // ToString converts a CharLine instance into string
@@ -57,7 +48,7 @@ func (cl CharLine) ToString() string {
 		if cl.ept[i] {
 			str[i] = " "
 		} else {
-			str[i] = cl.arr[ind]
+			str[i] = cl.rendChar(ind)
 			ind += 1
 		}
 	}
@@ -75,91 +66,81 @@ func (cl *CharLine) ResetChars() {
 	}
 }
 
-// slotInfo returns the occupation/empty index list
-func (cl CharLine) slotInfo() (occup, empty []int) {
-	empty = make([]int, cl.eptn)
-	occup = make([]int, cl.len-cl.eptn)
+func (cl CharLine) rendChar(ind int) string {
 
-	indEmpty := 0
-	indOccup := 0
-	for i, isEmpty := range cl.ept {
-		if isEmpty {
-			empty[indEmpty] = i
-			indEmpty += 1
-		} else {
-			occup[indOccup] = i
-			indOccup += 1
-		}
-	}
-	sort.Ints(occup)
-	sort.Ints(empty)
-	return occup, empty
+	return cl.arr[ind]
 }
 
-// Transi changes the cl with different row (by addn), addn < 0 will end a row
-func (cl *CharLine) Transi(addn int) {
-	occup, empty := cl.slotInfo()
-	swplen := min3(len(occup), len(empty), intabs(addn))
-	if addn < 0 {
-		for i := 0; i < swplen; i++ {
-			ind := rand.Intn(len(occup))
-			empty = append(empty, occup[ind])
-			occup = append(occup[:ind], occup[ind+1:]...)
-		}
-	} else {
-		for i := 0; i < swplen; i++ {
-			ind := rand.Intn(len(empty))
-			occup = append(occup, empty[ind])
-			empty = append(empty[:ind], empty[ind+1:]...)
-		}
+func (ch *CharLine) addAt(slots, dur []int) {
+	for i := range slots {
+		slt := slots[i]
+		ch.ept[slt] = false
+		ch.dur[slt] = dur[i]
 	}
-	cl.ResetSlot(occup, empty)
 }
 
-func (cl *CharLine) NewTransi(addn int) {
-	occup, empty := cl.slotInfo()
-	swplen := min3(len(occup), len(empty), intabs(addn))
-	if addn == 0 {
+func (ch *CharLine) updateAt(pos int) {
+	if ch.dur[pos] <= 0 {
+		ch.ept[pos] = true
+		ch.dur[pos] = 0
 		return
 	}
-	// if addn < 0 {
-	// 	sender, reciever := occup, empty
-	// 	indl, indr := GetRandomContinuousSubList(sender, swplen)
-	// 	occup, empty = SwapSubList(sender, reciever, indl, indr)
-	// } else {
-	// 	sender, reciever := empty, occup
-	// 	indl, indr := GetRandomContinuousSubList(sender, swplen)
-	// 	empty, occup = SwapSubList(sender, reciever, indl, indr)
-	// }
-	if addn < 0 {
-		occup, empty = integratedTransi(occup, empty, swplen)
-	} else {
-		empty, occup = integratedTransi(empty, occup, swplen)
-	}
-	cl.ResetSlot(occup, empty)
+	ch.dur[pos]--
 }
 
-func integratedTransi(sender, reciever []int, n int) (ns, nr []int) {
-	indl, indr, ok := GetRandomContinuousSubList(sender, n)
-	if !ok {
-		for i := 0; i < n; i++ {
-			sender, reciever = integratedTransi(sender, reciever, 1)
+func (ch CharLine) genEmptySlot() (emptySlot []int, eptn int) {
+	emptySlot = make([]int, ch.len)
+	eptn = 0
+	for i, empty := range ch.ept {
+		if empty {
+			emptySlot[eptn] = i
+			eptn++
 		}
-		return sender, reciever
 	}
-	sender, reciever = SwapSubList(sender, reciever, indl, indr)
-	return sender, reciever
+	emptySlot = emptySlot[:eptn]
+	return emptySlot, eptn
 }
 
-// ResetSlot reset the empty infomation by occupation/empty index lists
-func (cl *CharLine) ResetSlot(occup, empty []int) {
-	for i := range occup {
-		cl.ept[occup[i]] = false
+// RandSample returns a random sample from slice source with length n,
+// n should be not greater than the length of source
+func RandSample(source []int, n int) []int {
+	if n > len(source) {
+		fmt.Println("Error sampling setup")
+		panic(n)
 	}
-	for i := range empty {
-		cl.ept[empty[i]] = true
+	if n == len(source) {
+		return source
 	}
-	cl.eptn = len(empty)
+	if n == 0 {
+		return []int{}
+	}
+	choice := rand.Intn(len(source))
+	sub := append(source[:choice], source[choice+1:]...)
+	return append(RandSample(sub, n-1), source[choice])
+}
+
+// GenRandomChar returns a string randomly, with length 1 as a single character, in ascii [33, 127)
+func GenRandomChar() (char string) {
+	return string(rune(33 + rand.Intn(127-33)))
+}
+
+func GenDur(min, rang int) int {
+	return rand.Intn(rang) + min
+}
+
+func GenDurList(min, rang, len int) []int {
+	res := make([]int, len)
+	for i := range res {
+		res[i] = GenDur(min, rang)
+	}
+	return res
+}
+
+func intmin(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func IsContinue(arr []int) bool {
@@ -195,24 +176,4 @@ func SwapSubList(sender, reciever []int, indl, indr int) (nsen, nrec []int) {
 	sort.Ints(nsen)
 	sort.Ints(nrec)
 	return nsen, nrec
-}
-
-// min3 returns the minimul integer value of given three parameters
-func min3(a, b, c int) int {
-	z := a
-	v := []int{a, b, c}
-	for i := range v {
-		if v[i] <= z {
-			z = v[i]
-		}
-	}
-	return z
-}
-
-// intabs returns the absolute value of the integer
-func intabs(a int) int {
-	if a < 0 {
-		return -a
-	}
-	return a
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/fatih/color"
@@ -12,7 +13,7 @@ import (
 const UpdateEveryLineOverHeight float32 = 0.5
 const UpdateTimeInMillisecond int = 20
 const emptyRate int = 10
-const rowWid int = 2
+const addnMax int = 3
 
 func main() {
 
@@ -20,16 +21,13 @@ func main() {
 	defer color.Unset() // Use it in your function
 
 	ind := 0
-	rel := []int{1, 3, 2, -2, -3, -1, 3, 4, -4, -2, -1}
-	relind := 0
 
 	cl, linupd := StateInit()
 
 	for {
 		ind++
 		if ind%linupd == 0 {
-			cl.NewTransi(rel[relind])
-			relind = (relind + 1) % len(rel)
+			cl.Update(rand.Intn(addnMax), genDurs())
 		}
 		cl.ResetChars()
 		fmt.Print(cl.ToString())
@@ -41,6 +39,12 @@ func main() {
 func StateInit() (cl CharLine, linupd int) {
 	wid, hei, _ := term.GetSize(0)
 	linupd = int(float32(hei) * UpdateEveryLineOverHeight)
-	cl = GenRandCharLine(wid, emptyRate, rowWid)
+	cl = NewCharLine(wid, int(hei/2))
+	cl.Update(int(wid/emptyRate), genDurs())
 	return cl, linupd
+}
+
+func genDurs() []int {
+	wid, hei, _ := term.GetSize(0)
+	return GenDurList(int(hei/2), int(hei/2), wid)
 }

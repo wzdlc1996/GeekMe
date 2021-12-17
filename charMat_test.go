@@ -96,3 +96,10 @@ func TestSwapSubList(t *testing.T) {
 		}
 	}
 }
+
+func TestRandSample(t *testing.T) {
+	z := RandSample([]int{1, 2, 3, 4, 5}, 4)
+	if len(z) != 4 {
+		t.Errorf("Error")
+	}
+}
